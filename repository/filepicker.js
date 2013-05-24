@@ -175,15 +175,24 @@ YUI.add('moodle-core_filepicker', function(Y) {
         /** return the name of the file (different attributes in FileManager and FilePicker) */
         var file_get_filename = function(node) {
             return node.title ? node.title : node.fullname;
-        }
+        };
         /** return display name of the file (different attributes in FileManager and FilePicker) */
         var file_get_displayname = function(node) {
-            return node.shorttitle ? node.shorttitle : file_get_filename(node);
-        }
+            var displayname = node.shorttitle ? node.shorttitle : file_get_filename(node);
+            return Y.Escape.html(displayname);
+        };
         /** return file description (different attributes in FileManager and FilePicker) */
         var file_get_description = function(node) {
-            return node.description ? node.description : (node.thumbnail_title ? node.thumbnail_title : file_get_filename(node));
-        }
+            var description = '';
+            if (node.description) {
+                description = node.description;
+            } else if (node.thumbnail_title) {
+                description = node.thumbnail_title;
+            } else {
+                description = file_get_filename(node);
+            }
+            return Y.Escape.html(description);
+        };
         /** help funciton for tree view */
         var build_tree = function(node, level) {
             // prepare file name with icon
@@ -321,7 +330,6 @@ YUI.add('moodle-core_filepicker', function(Y) {
         }
         /** initialize table view */
         var initialize_table_view = function() {
-            var parentid = scope.one('.'+classname).get('id');
             var cols = [
                 {key: "displayname", label: M.str.moodle.name, allowHTML: true, formatter: formatTitle,
                     sortable: true, sortFn: sortFoldersFirst},
@@ -332,8 +340,13 @@ YUI.add('moodle-core_filepicker', function(Y) {
                 {key: "mimetype", label: M.str.repository.type, allowHTML: true,
                     sortable: true, sortFn: sortFoldersFirst}
             ];
-            scope.tableview = new Y.DataTable({columns: cols});
-            scope.tableview.render('#'+parentid);
+            for (var k in fileslist) {
+                // to speed up sorting and formatting
+                fileslist[k].displayname = file_get_displayname(fileslist[k]);
+                fileslist[k].isfolder = file_is_folder(fileslist[k]);
+                fileslist[k].classname = options.classnamecallback(fileslist[k]);
+            }
+            scope.tableview = new Y.DataTable({columns: cols, data: fileslist});
             scope.tableview.delegate('click', function (e, tableview) {
                 var record = tableview.getRecord(e.currentTarget.get('id'));
                 if (record) {
@@ -353,13 +366,8 @@ YUI.add('moodle-core_filepicker', function(Y) {
         }
         /** append items in table view mode */
         var append_files_table = function() {
-            for (var k in fileslist) {
-                // to speed up sorting and formatting
-                fileslist[k].displayname = file_get_displayname(fileslist[k]);
-                fileslist[k].isfolder = file_is_folder(fileslist[k]);
-                fileslist[k].classname = options.classnamecallback(fileslist[k]);
-            }
-            scope.tableview.addRows(fileslist);
+            var parentnode = scope.one('.'+classname);
+            scope.tableview.render(parentnode);
             scope.tableview.sortable = options.sortable ? true : false;
         };
         /** append items in tree view mode */
@@ -402,7 +410,7 @@ YUI.add('moodle-core_filepicker', function(Y) {
                 imgdiv.setStyleAdv('width', width).setStyleAdv('height', height);
                 var img = Y.Node.create('<img/>').setAttrs({
                         title: file_get_description(node),
-                        alt: node.thumbnail_alt ? node.thumbnail_alt : file_get_filename(node)}).
+                        alt: Y.Escape.html(node.thumbnail_alt ? node.thumbnail_alt : file_get_filename(node))}).
                     setStyle('maxWidth', ''+width+'px').
                     setStyle('maxHeight', ''+height+'px');
                 img.setImgSrc(src, node.realthumbnail, lazyloading);
@@ -654,18 +662,16 @@ M.core_filepicker.init = function(Y, options) {
                     'repository_id': this.active_repo.id,
                     'callback': function(id, o, args) {
                         scope.hide();
-                        // editor needs to update url
-                        // filemanager do nothing
                         if (scope.options.editor_target && scope.options.env == 'editor') {
+                            // editor needs to update url
                             scope.options.editor_target.value = data.existingfile.url;
                             scope.options.editor_target.onchange();
-                        } else if (scope.options.env === 'filepicker') {
-                            var fileinfo = {'client_id':scope.options.client_id,
-                                    'url':data.existingfile.url,
-                                    'file':data.existingfile.filename};
-                            var formcallback_scope = scope.options.magicscope ? scope.options.magicscope : scope;
-                            scope.options.formcallback.apply(formcallback_scope, [fileinfo]);
                         }
+                        var fileinfo = {'client_id':scope.options.client_id,
+                                'url':data.existingfile.url,
+                                'file':data.existingfile.filename};
+                        var formcallback_scope = scope.options.magicscope ? scope.options.magicscope : scope;
+                        scope.options.formcallback.apply(formcallback_scope, [fileinfo]);
                     }
                 }, true);
             }
@@ -739,7 +745,7 @@ M.core_filepicker.init = function(Y, options) {
             this.fpnode.one('.fp-content').setContent(M.core_filepicker.templates.error);
             this.fpnode.one('.fp-content .fp-error').
                 addClass(errorcode).
-                setContent(errortext);
+                setContent(Y.Escape.html(errortext));
         },
         /** displays message in a popup */
         print_msg: function(msg, type) {
@@ -769,7 +775,7 @@ M.core_filepicker.init = function(Y, options) {
 
             this.msg_dlg.set('headerContent', header);
             this.msg_dlg_node.removeClass('fp-msg-info').removeClass('fp-msg-error').addClass('fp-msg-'+type)
-            this.msg_dlg_node.one('.fp-msg-text').setContent(msg);
+            this.msg_dlg_node.one('.fp-msg-text').setContent(Y.Escape.html(msg));
             this.msg_dlg.show();
         },
         view_files: function(appenditems) {
@@ -1107,7 +1113,7 @@ M.core_filepicker.init = function(Y, options) {
                 if (selectnode.one('.fp-'+attrs[i])) {
                     var value = (args[attrs[i]+'_f']) ? args[attrs[i]+'_f'] : (args[attrs[i]] ? args[attrs[i]] : '');
                     selectnode.one('.fp-'+attrs[i]).addClassIf('fp-unknown', ''+value == '')
-                        .one('.fp-value').setContent(value);
+                        .one('.fp-value').setContent(Y.Escape.html(value));
                 }
             }
         },
@@ -1282,7 +1288,7 @@ M.core_filepicker.init = function(Y, options) {
             this.mainui = new Y.Panel({
                 srcNode      : this.fpnode,
                 headerContent: M.str.repository.filepicker,
-                zIndex       : 5000,
+                zIndex       : 7500,
                 centered     : true,
                 modal        : true,
                 visible      : false,
@@ -1303,7 +1309,7 @@ M.core_filepicker.init = function(Y, options) {
                 set('id', 'filepicker-select-'+client_id);
             this.selectui = new Y.Panel({
                 srcNode      : this.selectnode,
-                zIndex       : 6000,
+                zIndex       : 7600,
                 centered     : true,
                 modal        : true,
                 close        : true,
@@ -1321,8 +1327,10 @@ M.core_filepicker.init = function(Y, options) {
                 this.pathbar.removeChild(this.pathnode);
             }
             // assign callbacks for view mode switch buttons
-            this.fpnode.all('.fp-vb-icons,.fp-vb-tree,.fp-vb-details').
-                on('click', this.viewbar_clicked, this);
+            this.fpnode.one('.fp-vb-icons').on('click', this.viewbar_clicked, this);
+            this.fpnode.one('.fp-vb-tree').on('click', this.viewbar_clicked, this);
+            this.fpnode.one('.fp-vb-details').on('click', this.viewbar_clicked, this);
+
             // assign callbacks for toolbar links
             this.setup_toolbar();
             this.setup_select_file();
@@ -1353,7 +1361,7 @@ M.core_filepicker.init = function(Y, options) {
                             this.hide_header();
                             this.list({'repo_id':repository_id});
                         }, this /*handler running scope*/, repository.id/*second argument of handler*/);
-                    node.one('.fp-repo-name').setContent(repository.name);
+                    node.one('.fp-repo-name').setContent(Y.Escape.html(repository.name));
                     node.one('.fp-repo-icon').set('src', repository.icon);
                     if (i==0) {
                         node.addClass('first');
@@ -1608,7 +1616,7 @@ M.core_filepicker.init = function(Y, options) {
                 var option = Y.Node.create('<option/>').
                     set('selected', (this.options.defaultlicense==licenses[i].shortname)).
                     set('value', licenses[i].shortname).
-                    setContent(licenses[i].fullname);
+                    setContent(Y.Escape.html(licenses[i].fullname));
                 node.appendChild(option)
             }
         },
@@ -1868,7 +1876,7 @@ M.core_filepicker.init = function(Y, options) {
                     } else {
                         el.addClass('odd');
                     }
-                    el.all('.fp-path-folder-name').setContent(p[i].name);
+                    el.all('.fp-path-folder-name').setContent(Y.Escape.html(p[i].name));
                     el.on('click',
                             function(e, path) {
                                 e.preventDefault();

@@ -155,10 +155,11 @@ function message_send($eventdata) {
         if (isset($defaultpreferences->{$defaultpreference})) {
             $permitted = $defaultpreferences->{$defaultpreference};
         } else {
-            //MDL-25114 They supplied an $eventdata->component $eventdata->name combination which doesn't
-            //exist in the message_provider table (thus there is no default settings for them)
-            $preferrormsg = get_string('couldnotfindpreference', 'message', $defaultpreference);
-            throw new coding_exception($preferrormsg,'blah');
+            // MDL-25114 They supplied an $eventdata->component $eventdata->name combination which doesn't
+            // exist in the message_provider table (thus there is no default settings for them).
+            $preferrormsg = "Could not load preference $defaultpreference. Make sure the component and name you supplied
+                    to message_send() are valid.";
+            throw new coding_exception($preferrormsg);
         }
 
         // Find out if user has configured this output
@@ -283,6 +284,7 @@ function message_update_providers($component='moodle') {
         $DB->delete_records('message_providers', array('id' => $dbprovider->id));
         $DB->delete_records_select('config_plugins', "plugin = 'message' AND ".$DB->sql_like('name', '?', false), array("%_provider_{$component}_{$dbprovider->name}_%"));
         $DB->delete_records_select('user_preferences', $DB->sql_like('name', '?', false), array("message_provider_{$component}_{$dbprovider->name}_%"));
+        cache_helper::invalidate_by_definition('core', 'config', array(), 'message');
     }
 
     return true;
@@ -573,6 +575,8 @@ function message_provider_uninstall($component) {
     $DB->delete_records_select('config_plugins', "plugin = 'message' AND ".$DB->sql_like('name', '?', false), array("%_provider_{$component}_%"));
     $DB->delete_records_select('user_preferences', $DB->sql_like('name', '?', false), array("message_provider_{$component}_%"));
     $transaction->allow_commit();
+    // Purge all messaging settings from the caches. They are stored by plugin so we have to clear all message settings.
+    cache_helper::invalidate_by_definition('core', 'config', array(), 'message');
 }
 
 /**
@@ -590,4 +594,6 @@ function message_processor_uninstall($name) {
     // defaults, they will be removed on the next attempt to update the preferences
     $DB->delete_records_select('config_plugins', "plugin = 'message' AND ".$DB->sql_like('name', '?', false), array("{$name}_provider_%"));
     $transaction->allow_commit();
+    // Purge all messaging settings from the caches. They are stored by plugin so we have to clear all message settings.
+    cache_helper::invalidate_by_definition('core', 'config', array(), array('message', "message_{$name}"));
 }

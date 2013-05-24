@@ -51,6 +51,14 @@ class cache_config_writer_phpunit_tests extends advanced_testcase {
     }
 
     /**
+     * Final task is to reset the cache system
+     */
+    public static function tearDownAfterClass() {
+        parent::tearDownAfterClass();
+        cache_factory::reset();
+    }
+
+    /**
      * Test getting an instance. Pretty basic.
      */
     public function test_instance() {
@@ -146,15 +154,16 @@ class cache_config_writer_phpunit_tests extends advanced_testcase {
      */
     public function test_update_definitions() {
         $config = cache_config_writer::instance();
-        $earlydefinitions = $config->get_definitions();
-        unset($config);
-        cache_factory::reset();
+        // Remove the definition.
+        $config->phpunit_remove_definition('core/string');
+        $definitions = $config->get_definitions();
+        // Check it is gone.
+        $this->assertFalse(array_key_exists('core/string', $definitions));
+        // Update definitions. This should re-add it.
         cache_config_writer::update_definitions();
-
-        $config = cache_config_writer::instance();
-        $latedefinitions = $config->get_definitions();
-
-        $this->assertSame($latedefinitions, $earlydefinitions);
+        $definitions = $config->get_definitions();
+        // Check it is back again.
+        $this->assertTrue(array_key_exists('core/string', $definitions));
     }
 
     /**
@@ -295,6 +304,14 @@ class cache_administration_helper_phpunit_tests extends advanced_testcase {
         parent::setUp();
         cache_factory::reset();
         cache_config_phpunittest::create_default_configuration();
+    }
+
+    /**
+     * Final task is to reset the cache system
+     */
+    public static function tearDownAfterClass() {
+        parent::tearDownAfterClass();
+        cache_factory::reset();
     }
 
     /**
